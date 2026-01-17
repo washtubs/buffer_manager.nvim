@@ -1,4 +1,5 @@
 local Path = require("plenary.path")
+local Trie = require('./trie')
 
 local M = {}
 
@@ -62,6 +63,8 @@ function M.get_short_file_name(path, current_short_fns)
   path = tostring(path)
   -- Count the number of slashes in the relative file path
   local slash_count = 0
+
+
   if require("buffer_manager").get_config().show_depth then
     for _ in string.gmatch(path, "/") do
       slash_count = slash_count + 1
@@ -75,6 +78,8 @@ function M.get_short_file_name(path, current_short_fns)
   else
     short_name = M.get_file_name(path)
   end
+
+
   -- Check if the file name is already in the list of short file names
   -- If so, return the short file name with one number in front of it
   local i = 1
@@ -151,25 +156,65 @@ function M.replace_char(string, index, new_char)
   return string:sub(1,index-1)..new_char..string:sub(index+1)
 end
 
-
-function M.assign_shortcut(cmarks, buf_name)
+-- DAVID NOTE: Return a table of the form
+-- {
+-- seq: 'foo'
+-- idx: { 5, 10, 15 }
+-- }
+function M.assign_shortcut(cmarks, buf_name, config)
   -- Iterate over the filename, and assing the first char that is not already
   --  assigned in marks.
   local assigned_chars = {}
-  for _, mark in pairs(cmarks) do
-    if mark.shortcut then
-      assigned_chars[mark.shortcut] = true
+
+  if config.format_function == nil then
+    return nil
+  end
+
+  -- Maintain an array of bufids, ordered and with duplicates removed
+  local bufids = {}
+  local bufid2cm = {}
+  for _, cm in pairs(cmarks) do
+    local found=false
+    for _, bufid in ipairs(bufids) do
+      if bufid == cm.buf_id then
+        found=true
+      end
+    end
+    if not found then
+      table.insert(bufids, cm.buf_id)
+    end
+    if bufid2cm[cm.buf_id] == nil then
+      bufid2cm[cm.buf_id]={}
+    end
+    table.insert(bufid2cm[cm.buf_id], cm)
+  end
+  table.sort(bufids)
+
+
+  --print("NAMES")
+  --print(vim.inspect(bufids))
+
+  local buf_names = vim.tbl_map(function(bufid)
+    return config.format_function(bufid2cm[bufid][1].buf_name)
+  end, bufids)
+  local myWid = nil
+  for wid, bufname in ipairs(buf_names) do
+    if config.format_function(buf_name) == bufname then
+      myWid = wid
     end
   end
-  local filename = M.get_file_name(buf_name)
-  for i = 1, #filename do
-    local c = string.lower(filename:sub(i,i))
-    if c:match("%w") and not assigned_chars[c] then
-      assigned_chars[c] = true
-      return c
-    end
+  if myWid == nil then
+    table.insert(buf_names, config.format_function(buf_name))
+    myWid = #buf_names
   end
-  return nil
+
+  local shortcuts = Trie.build_shortcuts(buf_names)
+  print(vim.inspect(shortcuts))
+
+  --print('ASSIGNING')
+  --print(string.format('Setting %s shortcut to %s', buf_name, vim.inspect(shortcuts[myWid])))
+  return shortcuts[myWid]
+
 end
 
 

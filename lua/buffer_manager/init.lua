@@ -22,7 +22,7 @@ function M.initialize_marks()
         {
           buf_name = buf_name,
           buf_id = buf_id,
-          shortcut = utils.assign_shortcut(M.marks, buf_name),
+          shortcut = utils.assign_shortcut(M.marks, buf_name, BufferManagerConfig),
         }
       )
     end
@@ -60,6 +60,7 @@ function M.setup(config)
     show_indicators = nil,
     toggle_key_bindings = { "q", "<ESC>" },
     use_shortcuts = false,
+    use_tiebreakers = false,
   }
 
   local complete_config = utils.merge_tables(default_config, config)

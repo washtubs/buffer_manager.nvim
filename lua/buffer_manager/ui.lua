@@ -181,7 +181,7 @@ local function update_buffers()
     if bufnr == -1 or vim.fn.buflisted(bufnr) ~= 1 then
       vim.cmd("badd " .. mark.buf_name)
       bm.marks[idx].buf_id = vim.fn.bufnr(mark.buf_name)
-      bm.marks[idx].shortcut = utils.assign_shortcut(bm.marks, mark.buf_name)
+      bm.marks[idx].shortcut = utils.assign_shortcut(bm.marks, mark.buf_name, config)
     end
   end
 end
@@ -251,7 +251,7 @@ function M.update_marks()
       table.insert(bm.marks, {
         buf_name = bufname,
         buf_id = buf,
-        shortcut = utils.assign_shortcut(bm.marks, bufname),
+        shortcut = utils.assign_shortcut(bm.marks, bufname, config),
       })
     end
   end
@@ -318,10 +318,16 @@ local function set_menu_keybindings()
   if config.use_shortcuts then
     for idx, mark in pairs(bm.marks) do
       if mark.shortcut then
+        print(mark.shortcut.seq)
+        local seq = mark.shortcut.seq
+        if config.use_tiebreakers and mark.shortcut.tie_break ~= nil then
+          seq = seq..tostring(mark.shortcut.tie_break)
+        end
         vim.api.nvim_buf_set_keymap(
           Buffer_manager_bufh,
           "n",
-          mark.shortcut,
+          -- DAVID NOTE: This already supports multiple characters
+          seq,
           string.format(
             "<Cmd>%s <bar> lua require('buffer_manager.ui')"..
             ".select_menu_item()<CR>",
@@ -385,6 +391,25 @@ local function set_win_buf_options(contents, current_buf_line)
   vim.cmd(string.format(":call cursor(%d, %d)", current_buf_line, 1))
 end
 
+local function get_display_name(buf_name, current_short_fns)
+  local display_name = buf_name
+  if not utils.string_starts(display_name, "term://") then
+    if config.short_file_names then
+      display_name = utils.get_short_file_name(display_name, current_short_fns)
+      current_short_fns[display_name] = true
+    elseif config.format_function then
+      display_name = config.format_function(display_name)
+    else
+      display_name = utils.normalize_path(display_name)
+    end
+  else
+    if config.short_term_names then
+      display_name = utils.get_short_term_name(display_name)
+    end
+  end
+  return display_name
+end
+
 
 function M.toggle_quick_menu()
   log.trace("toggle_quick_menu()")
@@ -433,25 +458,15 @@ function M.toggle_quick_menu()
       if current_mark.buf_id == current_buf_id then
         current_buf_line = line
       end
-      local display_name = current_mark.buf_name
-      if not utils.string_starts(display_name, "term://") then
-        if config.short_file_names then
-          display_name = utils.get_short_file_name(display_name, current_short_fns)
-          current_short_fns[display_name] = true
-        elseif config.format_function then
-          display_name = config.format_function(display_name)
-        else
-          display_name = utils.normalize_path(display_name)
-        end
-      else
-        if config.short_term_names then
-          display_name = utils.get_short_term_name(display_name)
-        end
+      local display_name = get_display_name(current_mark.buf_name, current_short_fns)
+      local maybeTieBreak = ''
+      if config.use_tiebreakers and current_mark.shortcut ~= nil and current_mark.shortcut.tie_break ~= nil then
+         maybeTieBreak = ' '..tostring(current_mark.shortcut.tie_break)
       end
       if config.show_indicators == 'before' then
-         contents[line] = string.format("      %s", display_name)
+         contents[line] = string.format("      %s%s", display_name, maybeTieBreak)
       else
-         contents[line] = string.format("%s", display_name)
+         contents[line] = string.format("%s%s", display_name, maybeTieBreak)
       end
       line = line + 1
     end
@@ -487,26 +502,39 @@ function M.toggle_quick_menu()
       if dir_name == nil then
         dir_name = ""
       end
-      local char_pos = #dir_name + string.lower(file_name):find(mark.shortcut, 1, true)
-      if char_pos then
-        if version_minor > 9 then
-          vim.hl.range(
-            Buffer_manager_bufh,
-            ns_short,
-            "BufferManagerShortcut",
-            {idx-1, char_pos - 1},
-            {idx-1, char_pos},
-            {}
-          )
-        else
-          vim.api.nvim_buf_add_highlight(
-            Buffer_manager_bufh,
-            -1,
-            "BufferManagerShortcut",
-            idx-1,
-            char_pos - 1,
-            char_pos
-          )
+      local delta = 0
+      if config.show_indicators == "before" then
+        delta = 6
+      end
+      local char_positions = vim.tbl_map(function(i)
+        return i + delta
+      end, mark.shortcut.idx)
+      if config.use_tiebreakers and mark.shortcut.tie_break ~= nil then
+        local display_name = get_display_name(mark.buf_name, {})
+        print("putting tiebreaker at %d", delta + #display_name + 2)
+        table.insert(char_positions, delta + #display_name + 2)
+      end
+      for _, char_pos in ipairs(char_positions) do
+        if char_pos then
+          if version_minor > 9 then
+            vim.hl.range(
+              Buffer_manager_bufh,
+              ns_short,
+              "BufferManagerShortcut",
+              {idx-1, char_pos - 1},
+              {idx-1, char_pos},
+              {}
+            )
+          else
+            vim.api.nvim_buf_add_highlight(
+              Buffer_manager_bufh,
+              -1,
+              "BufferManagerShortcut",
+              idx-1,
+              char_pos - 1,
+              char_pos
+            )
+          end
         end
       end
     end
@@ -639,38 +667,38 @@ local function get_menu_items()
 end
 
 
-local function set_mark_list(new_list)
-  log.trace("set_mark_list(): New list:", new_list)
+--local function set_mark_list(new_list)
+  --log.trace("set_mark_list(): New list:", new_list)
 
-  local original_marks = utils.deep_copy(bm.marks)
-  bm.marks = {}
-  for _, v in pairs(new_list) do
-    if type(v) == "string" then
-      local buf_name = v
-      local buf_id = nil
-      local shortcut = nil
-      local current_mark = get_mark_by_name(buf_name, original_marks)
-      if current_mark then
-        buf_name = current_mark.buf_name
-        buf_id = current_mark.buf_id
-        shortcut = current_mark.shortcut
-      else
-        buf_id = vim.fn.bufnr(v)
-        shortcut = utils.assign_shortcut(bm.marks, buf_name)
-      end
-      table.insert(bm.marks, {
-        buf_name = buf_name,
-        buf_id = buf_id,
-        shortcut = shortcut,
-      })
-    end
-  end
-end
+  --local original_marks = utils.deep_copy(bm.marks)
+  --bm.marks = {}
+  --for _, v in pairs(new_list) do
+    --if type(v) == "string" then
+      --local buf_name = v
+      --local buf_id = nil
+      --local shortcut = nil
+      --local current_mark = get_mark_by_name(buf_name, original_marks)
+      --if current_mark then
+        --buf_name = current_mark.buf_name
+        --buf_id = current_mark.buf_id
+        --shortcut = current_mark.shortcut
+      --else
+        --buf_id = vim.fn.bufnr(v)
+        --shortcut = utils.assign_shortcut(bm.marks, buf_name)
+      --end
+      --table.insert(bm.marks, {
+        --buf_name = buf_name,
+        --buf_id = buf_id,
+        --shortcut = shortcut,
+      --})
+    --end
+  --end
+--end
 
 
 function M.on_menu_save()
   log.trace("on_menu_save()")
-  set_mark_list(get_menu_items())
+  --set_mark_list(get_menu_items())
 end
 
 
@@ -799,7 +827,7 @@ function M.load_menu_from_file(path)
     table.insert(lines, line)
   end
   file:close()
-  set_mark_list(lines)
+  --set_mark_list(lines)
   update_buffers()
 end
 
