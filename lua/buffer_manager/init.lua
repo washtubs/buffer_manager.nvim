@@ -22,12 +22,12 @@ function M.initialize_marks()
         {
           buf_name = buf_name,
           buf_id = buf_id,
-          shortcut = utils.assign_shortcut(M.marks, buf_name, BufferManagerConfig),
+          shortcut = nil,
         }
       )
     end
   end
-  utils.assign_shortcut2(M.marks, BufferManagerConfig)
+  utils.assign_shortcuts(M.marks, BufferManagerConfig)
 end
 
 

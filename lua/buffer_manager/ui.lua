@@ -190,11 +190,10 @@ local function update_buffers()
       vim.cmd("badd " .. mark.buf_name)
       bm.marks[idx].buf_id = vim.fn.bufnr(mark.buf_name)
       bufAdded = true
-      bm.marks[idx].shortcut = utils.assign_shortcut(bm.marks, mark.buf_name, config)
     end
   end
   if bufAdded then
-    utils.assign_shortcut2(bm.marks, config)
+    utils.assign_shortcuts(bm.marks, config)
   end
 end
 
@@ -265,10 +264,9 @@ function M.update_marks()
       table.insert(bm.marks, {
         buf_name = bufname,
         buf_id = buf,
-        --shortcut = utils.assign_shortcut(bm.marks, bufname, config),
       })
     end
-    utils.assign_shortcut2(bm.marks, config)
+    utils.assign_shortcuts(bm.marks, config)
   end
   -- Order the buffers, if the option is set
   if config.order_buffers then
@@ -709,12 +707,12 @@ local function set_mark_list(new_list)
       table.insert(bm.marks, {
         buf_name = buf_name,
         buf_id = buf_id,
-        shortcut = shortcut,
+        shortcut = nil,
       })
     end
   end
   if bufAdded then
-    utils.assign_shortcut2(bm.marks)
+    utils.assign_shortcuts(bm.marks)
   end
 end
 

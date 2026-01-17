@@ -360,7 +360,7 @@ local function putInStage(s, k, v)
   s[k] = v
 end
 
-local function build_shortcuts(words)
+local function build_shortcuts(words, pattern)
 
   -- Maps char to potentially multiple wids at a given stage
   -- Where there are multiple wid's its called a collision
@@ -487,7 +487,6 @@ local function build_shortcuts(words)
 
       -- Adjust the branch down until it starts with an acceptable character
       local delta
-      local pattern = '[a-zA-Z0-9]'
       delta, branch = unpack(findChar(string.sub(w, idx, idx), branch, pattern))
       idx = idx + delta
 

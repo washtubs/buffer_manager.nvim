@@ -158,7 +158,7 @@ function M.replace_char(string, index, new_char)
   return string:sub(1,index-1)..new_char..string:sub(index+1)
 end
 
-function M.assign_shortcut2(cmarks, config)
+function M.assign_shortcuts(cmarks, config)
   if config.format_function == nil then
     return nil
   end
@@ -195,76 +195,18 @@ function M.assign_shortcut2(cmarks, config)
     --return config.format_function(bufid2cm[bufid][1].buf_name)
   --end, bufids)
 
-  local shortcuts = Trie.build_shortcuts(bufnamesFormatted)
+  local shortcuts = Trie.build_shortcuts(bufnamesFormatted, '[a-zA-Z0-9]')
 
   for _, bufid in pairs(bufids) do
     local mark = bufid2cm[bufid]
+    -- shortcut is now of the form
+    -- {
+    -- seq: 'foo'
+    -- idx: { 5, 10, 15 }
+    -- }
     mark.shortcut = shortcuts[bufid2Idx[bufid]]
     log.trace('updating shortcut', mark.buf_name, shortcuts[bufid2Idx[bufid]])
   end
 end
-
--- DAVID NOTE: Return a table of the form
--- {
--- seq: 'foo'
--- idx: { 5, 10, 15 }
--- }
-function M.assign_shortcut(cmarks, buf_name, config)
-  -- Iterate over the filename, and assing the first char that is not already
-  --  assigned in marks.
-  local assigned_chars = {}
-
-  if config.format_function == nil then
-    return nil
-  end
-
-  -- Maintain an array of bufids, ordered and with duplicates removed
-  local bufids = {}
-  local bufid2cm = {}
-  for _, cm in pairs(cmarks) do
-    local found=false
-    for _, bufid in ipairs(bufids) do
-      if bufid == cm.buf_id then
-        found=true
-      end
-    end
-    if not found then
-      table.insert(bufids, cm.buf_id)
-    end
-    if bufid2cm[cm.buf_id] == nil then
-      bufid2cm[cm.buf_id]={}
-    end
-    table.insert(bufid2cm[cm.buf_id], cm)
-  end
-  table.sort(bufids)
-
-
-  --print("NAMES")
-  --print(vim.inspect(bufids))
-
-  local buf_names = vim.tbl_map(function(bufid)
-    return config.format_function(bufid2cm[bufid][1].buf_name)
-  end, bufids)
-
-  local myWid = nil
-  for wid, bufname in ipairs(buf_names) do
-    if config.format_function(buf_name) == bufname then
-      myWid = wid
-    end
-  end
-  if myWid == nil then
-    table.insert(buf_names, config.format_function(buf_name))
-    myWid = #buf_names
-  end
-
-  local shortcuts = Trie.build_shortcuts(buf_names)
-  log.trace('building trie', shortcuts)
-
-  --print('ASSIGNING')
-  --print(string.format('Setting %s shortcut to %s', buf_name, vim.inspect(shortcuts[myWid])))
-  return shortcuts[myWid]
-
-end
-
 
 return M
