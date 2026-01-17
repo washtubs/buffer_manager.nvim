@@ -251,7 +251,7 @@ autocmd FileType buffer_manager vnoremap K :m '<-2<CR>gv=gv
 
 ## Logging
 
-- Logs are written to `buffer_manager.log` within the nvim cache path (`:echo stdpath("cache")`)
+- Logs are written to `buffer_manager.log` within the nvim state path (`:echo stdpath("state")`)
 - Available log levels are `trace`, `debug`, `info`, `warn`, `error`, or `fatal`. `warn` is default
 - Log level can be set with `vim.g.buffer_manager_log_level` (must be **before** `setup()`)
 - Launching nvim with `BUFFER_MANAGER_LOG=debug nvim` takes precedence over `vim.g.buffer_manager_log_level`.

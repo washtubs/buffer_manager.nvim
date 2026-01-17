@@ -1,5 +1,7 @@
+local Dev = require("buffer_manager.dev")
+local log = Dev.log
 local Path = require("plenary.path")
-local Trie = require('./trie')
+local Trie = require('buffer_manager/trie')
 
 local M = {}
 
@@ -156,6 +158,9 @@ function M.replace_char(string, index, new_char)
   return string:sub(1,index-1)..new_char..string:sub(index+1)
 end
 
+function M.assign_shortcut2(cmarks, config)
+end
+
 -- DAVID NOTE: Return a table of the form
 -- {
 -- seq: 'foo'
@@ -209,7 +214,7 @@ function M.assign_shortcut(cmarks, buf_name, config)
   end
 
   local shortcuts = Trie.build_shortcuts(buf_names)
-  print(vim.inspect(shortcuts))
+  log.trace('building trie', shortcuts)
 
   --print('ASSIGNING')
   --print(string.format('Setting %s shortcut to %s', buf_name, vim.inspect(shortcuts[myWid])))

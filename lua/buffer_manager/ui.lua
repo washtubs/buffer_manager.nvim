@@ -166,23 +166,35 @@ end
 local function update_buffers()
   -- Check deletions
   for _, mark in pairs(initial_marks) do
+    log.trace('checking removal', mark.buf_id, mark.buf_name)
     if not is_buffer_in_marks(mark.buf_id) then
+      log.trace('notInMarks', mark.buf_id, mark.buf_name)
       if can_be_deleted(mark.buf_name, mark.buf_id) then
+        log.trace('deleting', mark.buf_id, mark.buf_name)
         vim.api.nvim_buf_clear_namespace(mark.buf_id, -1, 1, -1)
         vim.api.nvim_buf_delete(mark.buf_id, {})
       end
+    else
+      log.trace('inMarks', mark.buf_id, mark.buf_name)
     end
   end
 
   -- Check additions
+  local bufAdded = false
   for idx, mark in pairs(bm.marks) do
+    log.trace('checking addition', idx, mark.buf_name)
     local bufnr = vim.fn.bufnr(mark.buf_name)
     -- Add buffer only if it does not already exist or if it is not listed
     if bufnr == -1 or vim.fn.buflisted(bufnr) ~= 1 then
+      log.trace('adding', idx, mark.buf_name)
       vim.cmd("badd " .. mark.buf_name)
       bm.marks[idx].buf_id = vim.fn.bufnr(mark.buf_name)
+      bufAdded = true
       bm.marks[idx].shortcut = utils.assign_shortcut(bm.marks, mark.buf_name, config)
     end
+  end
+  if bufAdded then
+    utils.assign_shortcut2(bm.marks, config)
   end
 end
 
@@ -245,15 +257,18 @@ function M.update_marks()
   end
   -- Check if any buffer has been added
   -- If so, add it to marks
+  local bufsAdded = false
   for _, buf in pairs(vim.api.nvim_list_bufs()) do
     local bufname = vim.api.nvim_buf_get_name(buf)
     if utils.buffer_is_valid(buf, bufname) and not is_buffer_in_marks(buf) then
+      bufsAdded = true
       table.insert(bm.marks, {
         buf_name = bufname,
         buf_id = buf,
-        shortcut = utils.assign_shortcut(bm.marks, bufname, config),
+        --shortcut = utils.assign_shortcut(bm.marks, bufname, config),
       })
     end
+    utils.assign_shortcut2(bm.marks, config)
   end
   -- Order the buffers, if the option is set
   if config.order_buffers then
@@ -412,8 +427,9 @@ end
 
 
 function M.toggle_quick_menu()
-  log.trace("toggle_quick_menu()")
   if Buffer_manager_win_id ~= nil and vim.api.nvim_win_is_valid(Buffer_manager_win_id) then
+    log.trace("toggle_quick_menu() closing")
+    -- Menu is closing
     if vim.api.nvim_buf_get_changedtick(vim.fn.bufnr()) > 0 then
       M.on_menu_save()
     end
@@ -421,6 +437,8 @@ function M.toggle_quick_menu()
     update_buffers()
     return
   end
+  -- Menu is opening
+  log.trace("toggle_quick_menu() opening")
   local current_buf_id = -1
   if config.focus_alternate_buffer then
     current_buf_id = vim.fn.bufnr("#")
@@ -667,38 +685,43 @@ local function get_menu_items()
 end
 
 
---local function set_mark_list(new_list)
-  --log.trace("set_mark_list(): New list:", new_list)
+local function set_mark_list(new_list)
+  log.trace("set_mark_list(): New list:", new_list)
 
-  --local original_marks = utils.deep_copy(bm.marks)
-  --bm.marks = {}
-  --for _, v in pairs(new_list) do
-    --if type(v) == "string" then
-      --local buf_name = v
-      --local buf_id = nil
-      --local shortcut = nil
-      --local current_mark = get_mark_by_name(buf_name, original_marks)
-      --if current_mark then
-        --buf_name = current_mark.buf_name
-        --buf_id = current_mark.buf_id
-        --shortcut = current_mark.shortcut
-      --else
-        --buf_id = vim.fn.bufnr(v)
-        --shortcut = utils.assign_shortcut(bm.marks, buf_name)
-      --end
-      --table.insert(bm.marks, {
-        --buf_name = buf_name,
-        --buf_id = buf_id,
-        --shortcut = shortcut,
-      --})
-    --end
-  --end
---end
+  local original_marks = utils.deep_copy(bm.marks)
+  bm.marks = {}
+  local bufAdded = false
+  for _, v in pairs(new_list) do
+    if type(v) == "string" then
+      local buf_name = v
+      local buf_id = nil
+      local shortcut = nil
+      local current_mark = get_mark_by_name(buf_name, original_marks)
+      if current_mark then
+        buf_name = current_mark.buf_name
+        buf_id = current_mark.buf_id
+        shortcut = current_mark.shortcut
+      else
+        buf_id = vim.fn.bufnr(v)
+        shortcut = utils.assign_shortcut(bm.marks, buf_name)
+        bufAdded = true
+      end
+      table.insert(bm.marks, {
+        buf_name = buf_name,
+        buf_id = buf_id,
+        shortcut = shortcut,
+      })
+    end
+  end
+  if bufAdded then
+    utils.assign_shortcut2(bm.marks)
+  end
+end
 
 
 function M.on_menu_save()
   log.trace("on_menu_save()")
-  --set_mark_list(get_menu_items())
+  set_mark_list(get_menu_items())
 end
 
 

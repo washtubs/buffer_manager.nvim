@@ -27,6 +27,7 @@ function M.initialize_marks()
       )
     end
   end
+  utils.assign_shortcut2(M.marks, BufferManagerConfig),
 end
 
 
