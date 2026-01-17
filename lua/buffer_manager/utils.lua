@@ -159,6 +159,49 @@ function M.replace_char(string, index, new_char)
 end
 
 function M.assign_shortcut2(cmarks, config)
+  if config.format_function == nil then
+    return nil
+  end
+  for idx, mark in pairs(cmarks) do
+    log.trace('marks', idx, mark.buf_id, mark.buf_name)
+  end
+
+  -- Maintain an array of bufids, ordered and with duplicates removed
+  local bufids = {}
+  local bufnamesFormatted = {}
+  local bufid2cm = {}
+  local bufid2Idx = {}
+  local bufIdx = 0
+  for _, cm in pairs(cmarks) do
+    local found=false
+    for _, bufid in ipairs(bufids) do
+      if bufid == cm.buf_id then
+        found=true
+      end
+    end
+    if not found then
+      table.insert(bufids, cm.buf_id)
+      table.insert(bufnamesFormatted, config.format_function(cm.buf_name))
+      bufIdx = bufIdx+1
+      bufid2cm[cm.buf_id] = cm
+      bufid2Idx[cm.buf_id] = bufIdx
+    end
+  end
+  table.sort(bufids)
+  log.trace('bufids', bufids)
+  log.trace('bufnames', bufnamesFormatted)
+
+  --local buf_names = vim.tbl_map(function(bufid)
+    --return config.format_function(bufid2cm[bufid][1].buf_name)
+  --end, bufids)
+
+  local shortcuts = Trie.build_shortcuts(bufnamesFormatted)
+
+  for _, bufid in pairs(bufids) do
+    local mark = bufid2cm[bufid]
+    mark.shortcut = shortcuts[bufid2Idx[bufid]]
+    log.trace('updating shortcut', mark.buf_name, shortcuts[bufid2Idx[bufid]])
+  end
 end
 
 -- DAVID NOTE: Return a table of the form
@@ -202,6 +245,7 @@ function M.assign_shortcut(cmarks, buf_name, config)
   local buf_names = vim.tbl_map(function(bufid)
     return config.format_function(bufid2cm[bufid][1].buf_name)
   end, bufids)
+
   local myWid = nil
   for wid, bufname in ipairs(buf_names) do
     if config.format_function(buf_name) == bufname then
